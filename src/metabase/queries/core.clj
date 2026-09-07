@@ -9,6 +9,7 @@
    [metabase.queries.models.query]
    [metabase.queries.models.stored-result]
    [metabase.queries.models.stored-result-use]
+   [metabase.queries.template-tags]
    [potemkin :as p]))
 
 (comment metabase.queries.cached-result/keep-me
@@ -19,7 +20,8 @@
          metabase.queries.models.parameter-card/keep-me
          metabase.queries.models.query/keep-me
          metabase.queries.models.stored-result/keep-me
-         metabase.queries.models.stored-result-use/keep-me)
+         metabase.queries.models.stored-result-use/keep-me
+         metabase.queries.template-tags/keep-me)
 
 (p/import-vars
  [metabase.queries.card
@@ -38,7 +40,6 @@
   maybe-unverify!
   model-supports-implicit-actions?
   model?
-  parameter-template-tag?
   sole-dashboard-id
   starting-card-schema-version
   update-card!
@@ -63,7 +64,9 @@
   cached-dataset]
  [metabase.queries.models.stored-result-use
   assert-can-view-card-snapshots!
-  carry-pairings-for-document!])
+  carry-pairings-for-document!]
+ [metabase.queries.template-tags
+  parameter-template-tag?])
 
 ;; the re-exported var carries the docstring; kondo can't see through import-def
 #_{:clj-kondo/ignore [:missing-docstring]}
@@ -71,7 +74,7 @@
 
 ;; the re-exported var carries the docstring; kondo can't see through import-def
 #_{:clj-kondo/ignore [:missing-docstring]}
-(p/import-def metabase.queries.models.card/template-tag-parameters card-template-tag-parameters)
+(p/import-def metabase.queries.template-tags/template-tag-parameters card-template-tag-parameters)
 
 ;; the re-exported var carries the docstring; kondo can't see through import-def
 #_{:clj-kondo/ignore [:missing-docstring]}
