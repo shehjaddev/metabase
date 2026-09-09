@@ -19,6 +19,7 @@
    [metabase.sync.sync-metadata.metabase-metadata :as metabase-metadata]
    [metabase.sync.util :as sync-util]
    [metabase.util :as u]
+   [metabase.util.honey-sql-2 :as h2x]
    [metabase.util.log :as log]
    [metabase.util.malli :as mu]
    [metabase.util.malli.schema :as ms]))
@@ -365,9 +366,7 @@
         ;; it doesn't matter much, the source of time truth is `archived_at`,
         ;; we're just using this as a cheap namespace
         suffix (str "__mbarchiv__" (.toEpochSecond (t/offset-date-time)))
-        threshold-expr (apply
-                        (requiring-resolve 'metabase.util.honey-sql-2/add-interval-honeysql-form)
-                        (mdb/db-type) :%now archive-tables-threshold)
+        threshold-expr (apply h2x/add-interval-honeysql-form (mdb/db-type) :%now archive-tables-threshold)
         tables-to-archive (sync.db/tables-to-archive (u/the-id database) threshold-expr)
         archived (atom 0)]
     (doseq [table tables-to-archive

@@ -43,6 +43,7 @@
    [metabase.util.malli.registry :as mr]
    [metabase.util.malli.schema :as ms]
    [metabase.warehouse-schema.db :as warehouse-schema.db]
+   [metabase.warehouse-schema.metadata-from-qp :as metadata-from-qp]
    [methodical.core :as methodical]
    [toucan2.core :as t2]))
 
@@ -387,7 +388,7 @@
   (try
     (let [field  (cond-> field
                    (t2/model field) (lib-be/instance->metadata :metadata/column))
-          result ((requiring-resolve 'metabase.warehouse-schema.metadata-from-qp/table-query)
+          result (metadata-from-qp/table-query
                   (:table-id field)
                   (fn [query]
                     (-> query
