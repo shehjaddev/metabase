@@ -897,7 +897,7 @@
   (model-ownership)
   (model-boundary-violations (kondo-config)))
 
-;;;; Module boundary debt
+;;;; Module boundary analysis
 
 (defn- graph-nodes [graph]
   (into (set (keys graph)) (mapcat val) graph))
