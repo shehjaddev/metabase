@@ -11,7 +11,7 @@
    [:schema [:maybe :string]]
    [:name   ::lib.schema.common/non-blank-string]])
 
-(mr/def ::table-remapping
+(mr/def ::workspace-table-remapping
   "A `:model/WorkspaceTableRemapping` row: the canonical table `from_*` is backed by the workspace table `to_*`."
   [:map
    [:id          pos-int?]

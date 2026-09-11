@@ -41,7 +41,7 @@
    table-name :- ::lib.schema.common/non-blank-string]
   (ws.impl/canonical-table db-id schema table-name))
 
-(defenterprise-schema table-remappings :- [:sequential ::ws.schema/table-remapping]
+(defenterprise-schema table-remappings :- [:sequential ::ws.schema/workspace-table-remapping]
   "Every remapping of the Database with `db-id`."
   :feature :workspaces
   [db-id :- ::lib.schema.id/database]

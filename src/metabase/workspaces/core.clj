@@ -72,7 +72,7 @@
    table-name :- ::lib.schema.common/non-blank-string]
   {:schema schema, :name table-name})
 
-(defenterprise-schema table-remappings :- [:sequential ::ws.schema/table-remapping]
+(defenterprise-schema table-remappings :- [:sequential ::ws.schema/workspace-table-remapping]
   "Every remapping of the Database with `db-id`: rows with `:from_schema`/`:from_table` (the canonical table) and
   `:to_schema`/`:to_table` (its workspace table)."
   metabase-enterprise.workspaces.core

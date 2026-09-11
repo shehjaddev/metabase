@@ -32,7 +32,7 @@
   (memoize/memo-clear! cached-remappings-for-db)
   nil)
 
-(mu/defn remappings-for-db :- [:maybe [:sequential ::ws.schema/table-remapping]]
+(mu/defn remappings-for-db :- [:maybe [:sequential ::ws.schema/workspace-table-remapping]]
   "The remappings of the Database with `db-id` while workspaces are enabled, otherwise nil."
   [db-id :- ::lib.schema.id/database]
   (when (ws.settings/workspaces-enabled)
@@ -61,7 +61,7 @@
   []
   (str/replace (str (random-uuid)) "-" ""))
 
-(mu/defn- get-or-create-remapping! :- ::ws.schema/table-remapping
+(mu/defn- get-or-create-remapping! :- ::ws.schema/workspace-table-remapping
   "The remapping of the canonical table, moved to `to-schema` if the workspace schema changed since it was created,
   or a new one. Safe against a concurrent first run of the same target."
   [db-id       :- ::lib.schema.id/database
@@ -113,7 +113,7 @@
     {:schema from_schema, :name from_table}
     {:schema schema, :name table-name}))
 
-(mu/defn table-remappings :- [:sequential ::ws.schema/table-remapping]
+(mu/defn table-remappings :- [:sequential ::ws.schema/workspace-table-remapping]
   "Every remapping of the Database with `db-id`."
   [db-id :- ::lib.schema.id/database]
   (ws.db/remappings-for-db db-id))

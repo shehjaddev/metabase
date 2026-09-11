@@ -17,26 +17,26 @@
   [db-id :- ::lib.schema.id/database]
   (t2/select-one :model/Database :id db-id))
 
-(mu/defn remappings-for-db :- [:sequential ::ws.schema/table-remapping]
+(mu/defn remappings-for-db :- [:sequential ::ws.schema/workspace-table-remapping]
   "Every remapping of the Database with `db-id`."
   [db-id :- ::lib.schema.id/database]
   (t2/select :model/WorkspaceTableRemapping :db_id db-id))
 
-(mu/defn remapping-for-source :- [:maybe ::ws.schema/table-remapping]
+(mu/defn remapping-for-source :- [:maybe ::ws.schema/workspace-table-remapping]
   "The remapping of the Database with `db-id` whose canonical table is `table-name` in `schema`, or nil."
   [db-id      :- ::lib.schema.id/database
    schema     :- [:maybe :string]
    table-name :- ::lib.schema.common/non-blank-string]
   (t2/select-one :model/WorkspaceTableRemapping :db_id db-id :from_schema schema :from_table table-name))
 
-(mu/defn remapping-for-target :- [:maybe ::ws.schema/table-remapping]
+(mu/defn remapping-for-target :- [:maybe ::ws.schema/workspace-table-remapping]
   "The remapping of the Database with `db-id` whose workspace table is `table-name` in `schema`, or nil."
   [db-id      :- ::lib.schema.id/database
    schema     :- [:maybe :string]
    table-name :- ::lib.schema.common/non-blank-string]
   (t2/select-one :model/WorkspaceTableRemapping :db_id db-id :to_schema schema :to_table table-name))
 
-(mu/defn remapping :- [:maybe ::ws.schema/table-remapping]
+(mu/defn remapping :- [:maybe ::ws.schema/workspace-table-remapping]
   "The remapping with `remapping-id`, or nil."
   [remapping-id :- pos-int?]
   (t2/select-one :model/WorkspaceTableRemapping remapping-id))

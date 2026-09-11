@@ -151,7 +151,7 @@
 
 (defenterprise-schema enable-workspace-overlay? :- :boolean
   "Whether a read of Tables should name the workspace table a transform wrote its output to, rather than the
-  canonical one the Table row holds.
+  canonical one the Table row holds, and leave that table's own Table row out.
 
   Declared with the narrow `metabase.premium-features.defenterprise` rather than `premium-features.core`: this module
   sits below the settings namespaces, and `premium-features.core` would close a load cycle."
@@ -159,7 +159,7 @@
   []
   false)
 
-(def table-columns
+(def ^:private table-columns
   "Every column of `metabase_table`. Spelled out rather than read from `:metabase.warehouse-schema.schema/table`,
   which lives in a module above this one; `metabase.warehouse-schema-overlay.core-test` fails if the two drift."
   #{:active :archived_at :caveats :collection_id :created_at :data_authority :data_layer :data_source
@@ -232,17 +232,33 @@
     [:= (u/qualified-key remapping-alias :from_table) (u/qualified-key table-alias :name)]]])
 
 (mu/defn- workspace-table-join
-  "The `:left-join` entries joining `workspace_table_remapping` as `remapping-alias` to the Table table aliased
-  `table-alias` on the *workspace* table a remapping points at -- the anti-join half of [[table-query]]: sync gives
-  a workspace table a Table row of its own, and that row would otherwise come back alongside the canonical row now
-  remapped onto it."
+  "The `:left-join` entries matching the Table aliased `table-alias` against the remapping aliased `remapping-alias`
+  that points at it, and then, as `canonical-alias`, the canonical Table row that remapping stands for."
   [table-alias     :- :keyword
-   remapping-alias :- :keyword]
+   remapping-alias :- :keyword
+   canonical-alias :- :keyword]
   [[(t2/table-name :model/WorkspaceTableRemapping) remapping-alias]
    [:and
     [:= (u/qualified-key remapping-alias :db_id) (u/qualified-key table-alias :db_id)]
     [:= (u/qualified-key remapping-alias :to_schema) (u/qualified-key table-alias :schema)]
-    [:= (u/qualified-key remapping-alias :to_table) (u/qualified-key table-alias :name)]]])
+    [:= (u/qualified-key remapping-alias :to_table) (u/qualified-key table-alias :name)]]
+   [(t2/table-name :model/Table) canonical-alias]
+   [:and
+    [:= (u/qualified-key canonical-alias :db_id) (u/qualified-key remapping-alias :db_id)]
+    [:= (u/qualified-key canonical-alias :schema) (u/qualified-key remapping-alias :from_schema)]
+    [:= (u/qualified-key canonical-alias :name) (u/qualified-key remapping-alias :from_table)]]])
+
+(mu/defn- workspace-table-filter
+  "Honey SQL predicate dropping the Table rows that name a workspace table. Sync gives such a table a row of its own,
+  and that row is a second Table over the same data -- one a restriction on the canonical table would not reach.
+
+  Only while that canonical row is there to take its place, though: a transform whose canonical table never existed
+  has nothing else naming its output. Requires [[workspace-table-join]]."
+  [remapping-alias :- :keyword
+   canonical-alias :- :keyword]
+  [:or
+   [:= (u/qualified-key remapping-alias :id) nil]
+   [:= (u/qualified-key canonical-alias :id) nil]])
 
 (mu/defn- workspace-remapped-column
   "Honey SQL expression for `column` as readers see it: the workspace table's value when the Table has a remapping,
@@ -255,9 +271,8 @@
    :else (u/qualified-key table-alias column)])
 
 (mu/defn- table-select
-  "The `:select` list [[table-query]] projects: every Table column, each taken from whichever source names it for the
-  reader asking. The two overlays never touch the same column -- what a user sets is never where the table lives --
-  so each column has at most one of them."
+  "The `:select` list [[table-query]] projects: every Table column, from whichever overlay names it. No column has
+  both -- what a user sets is never where the table lives."
   [user-settings? :- :boolean
    remapping?     :- :boolean]
   (mapv (fn [column]
@@ -273,27 +288,22 @@
         (sort table-columns)))
 
 (mu/defn table-query :- [:tuple :any :keyword]
-  "The source a query over Tables reads from, for its `:from` or a join: a subquery over `metabase_table` left joined
-  to what overlays it, projecting every Table column with the overlaid ones replaced by the value readers see.
-
-  Sync gives the workspace table a Table row of its own, which would then be a second row naming the same place; it
-  is left out here, so a database with both rows reads as the one table it is.
+  "The source a query over Tables reads from, for its `:from` or a join: a subquery projecting every Table column,
+  the overlaid ones replaced by the value readers see.
 
     (t2/select :model/Table :db_id database-id {:from [(table-query)]})
 
-  Two overlays apply, each with its own opt-out, because they answer to different readers:
+  Two overlays apply, each with its own opt-out:
 
   - `:user-settings?` merges `metabase_table_user_settings`, the values a user set. `false` asks for sync's own.
-  - `:workspace-remapping?` projects `schema` and `name` from the `workspace_table_remapping` row a transform wrote
-    when it sent its output to the database's workspace schema, so a reader -- the query processor included -- names
-    the table the data is actually in while the Table row keeps the canonical identity sync recorded. `false` asks
-    for that canonical location. Off unless workspaces are enabled, so the common case pays nothing.
+  - `:workspace-remapping?` takes `schema` and `name` from the `workspace_table_remapping` row a transform wrote
+    when it sent its output to the workspace schema, so a reader names the table the data is in while the Table row
+    keeps the canonical identity. Also applies [[workspace-table-filter]], so the workspace table's own row does not
+    come back beside it. `false` asks for the canonical location. Off unless workspaces are enabled, so the common
+    case pays nothing.
 
-  Sync wants neither: it reconciles the rows it wrote against the warehouse. A permission query wants the remapping
-  without the user settings -- see `metabase.permissions.models.data-permissions.sql/table-source`.
-
-  Takes `:alias` as [[field-query]] does, for a query that joins something else. With both overlays off this is
-  `metabase_table` itself, which keeps the shape usable anywhere a plain table reference was."
+  Sync wants neither, reconciling against the warehouse what it wrote. `:alias` is as in [[field-query]]. With both
+  overlays off this is `metabase_table` itself, usable anywhere a plain table reference was."
   ([]
    (table-query nil))
 
@@ -306,14 +316,12 @@
                                                     [:workspace-remapping? {:optional true} :boolean]]]]
    (let [remapping? (and workspace-remapping? (enable-workspace-overlay?))]
      [(if (or user-settings? remapping?)
-        ^:allow-subquery
-        (cond-> {:select    (table-select user-settings? remapping?)
-                 :from      [[(t2/table-name :model/Table) :t]]
-                 :left-join (cond-> []
-                              user-settings? (into (table-user-settings-join :t :u))
-                              remapping?     (into (concat (workspace-remapping-join :t :w)
-                                                           (workspace-table-join :t :wt))))}
-          ;; the workspace table's own Table row drops out: the canonical row above already names it
-          remapping? (assoc :where [:= :wt.id nil]))
+        (cond-> ^:allow-subquery {:select    (table-select user-settings? remapping?)
+                                  :from      [[(t2/table-name :model/Table) :t]]
+                                  :left-join (cond-> []
+                                               user-settings? (into (table-user-settings-join :t :u))
+                                               remapping?     (into (concat (workspace-remapping-join :t :w)
+                                                                            (workspace-table-join :t :wt :ct))))}
+          remapping? (assoc :where (workspace-table-filter :wt :ct)))
         (t2/table-name :model/Table))
       alias])))

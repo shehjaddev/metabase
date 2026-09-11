@@ -38,7 +38,7 @@
   "The `:tables` replacements for `sql-tools/replace-names`. A table in the driver's default schema also matches
   unqualified."
   [driver     :- :keyword
-   remappings :- [:sequential ::ws.schema/table-remapping]]
+   remappings :- [:sequential ::ws.schema/workspace-table-remapping]]
   (let [default-schema (default-schema driver)]
     (into {}
           (mapcat (fn [{:keys [from_schema from_table to_schema to_table]}]
@@ -53,7 +53,7 @@
   a QP error rather than running the query against the canonical tables."
   [driver     :- :keyword
    sql        :- :string
-   remappings :- [:sequential ::ws.schema/table-remapping]]
+   remappings :- [:sequential ::ws.schema/workspace-table-remapping]]
   (try
     (sql-tools/replace-names driver sql {:tables (sql-table-replacements driver remappings)} {:allow-unused? true})
     (catch Exception e
@@ -63,7 +63,7 @@
 
 (mu/defn- rewrite-stages :- [:sequential :map]
   [driver     :- :keyword
-   remappings :- [:sequential ::ws.schema/table-remapping]
+   remappings :- [:sequential ::ws.schema/workspace-table-remapping]
    stages     :- [:sequential :map]]
   (mapv (fn [stage]
           (cond-> stage

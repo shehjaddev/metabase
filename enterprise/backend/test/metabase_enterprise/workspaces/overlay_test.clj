@@ -75,3 +75,20 @@
            (is (= #{canonical [workspace-schema workspace-table]}
                   (workspaces/with-table-remapping-disabled
                     (orders-tables (second canonical)))))))))))
+
+(deftest keeps-a-workspace-table-with-no-canonical-row-test
+  (testing "a transform whose canonical table never existed has only its workspace table's row to name its output,
+            so that row stays -- hiding it would lose the table altogether"
+    (mt/with-premium-features #{:workspaces}
+      (mt/with-temporary-setting-values [workspaces-enabled true]
+        (mt/with-temp [:model/WorkspaceTableRemapping _ {:db_id       (mt/id)
+                                                         :from_schema "never_synced"
+                                                         :from_table  "orphan"
+                                                         :to_schema   workspace-schema
+                                                         :to_table    workspace-table}
+                       :model/Table                   _ {:db_id  (mt/id)
+                                                         :schema workspace-schema
+                                                         :name   workspace-table}]
+          (#'ws.impl/clear-remappings-cache!)
+          (is (= #{[workspace-schema workspace-table]}
+                 (orders-tables "orphan"))))))))

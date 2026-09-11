@@ -131,7 +131,11 @@
   write the duplicate rows a permissions join produces (\"duplicate key in table '/tmp/#sql…'\").
 
   The one permission query that does need the merged values -- publishing a Table is what grants access to it -- is
-  `published-table-perm-grant-rows`, which reads through the overlay."
+  `published-table-perm-grant-rows`, which reads through the overlay.
+
+  The workspace overlay is kept, though: it leaves out the Table row sync gives a workspace table, which permissions
+  granted on the canonical table would not reach. That costs the derived table above, and with it the MariaDB
+  limitation, only on an instance with workspaces enabled."
   []
   (warehouse-schema-overlay/table-query {:alias :mt, :user-settings? false}))
 
