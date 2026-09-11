@@ -1,4 +1,4 @@
-(ns metabase-enterprise.workspaces.models.workspace-table-remapping
+(ns metabase.workspaces.models.workspace-table-remapping
   "Toucan 2 model for `workspace_table_remapping`. Writes invalidate the database's query cache, whose results were produced
   against the previous table."
   (:require

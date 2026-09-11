@@ -2,15 +2,15 @@
   "Application database queries for the workspaces module. Every function here is a direct Toucan 2 call with no
   additional logic."
   (:require
-   [metabase-enterprise.workspaces.models.workspace-table-remapping]
    [metabase.app-db.core :as app-db]
    [metabase.lib.schema.common :as lib.schema.common]
    [metabase.lib.schema.id :as lib.schema.id]
    [metabase.util.malli :as mu]
+   [metabase.workspaces.models.workspace-table-remapping]
    [metabase.workspaces.schema :as ws.schema]
    [toucan2.core :as t2]))
 
-(comment metabase-enterprise.workspaces.models.workspace-table-remapping/keep-me)
+(comment metabase.workspaces.models.workspace-table-remapping/keep-me)
 
 (mu/defn database :- [:maybe [:map [:id ::lib.schema.id/database] [:engine :keyword]]]
   "The Database with `db-id`, or nil."

@@ -3036,8 +3036,12 @@
 
   workspaces
   {:team "Graphy"
-   :api  #{metabase.workspaces.core metabase.workspaces.schema}
-   :uses #{lib premium-features util}}
+   :api  #{metabase.workspaces.core metabase.workspaces.models.workspace-table-remapping metabase.workspaces.schema}
+   :uses #{cache
+           lib
+           premium-features
+           util}
+   :model-exports #{:model/WorkspaceTableRemapping}}
 
   xrays
   {:team "Graphy"
@@ -4094,7 +4098,6 @@
   {:team "Graphy"
    :api  #{metabase-enterprise.workspaces.init}
    :uses #{app-db
-           cache
            driver
            lib
            premium-features
@@ -4103,8 +4106,7 @@
            sql-tools
            util
            workspaces}
-   :model-imports #{:model/Database}
-   :model-exports #{:model/WorkspaceTableRemapping}}}
+   :model-imports #{:model/Database :model/WorkspaceTableRemapping}}}
 
  ;; namespaces matching these patterns (with `re-find`) are excluded from the module linter. Since regex literals
  ;; aren't allowed in EDN just used the `(str <regex>)` version i.e. two slashes instead of one.
