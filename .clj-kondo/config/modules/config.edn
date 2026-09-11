@@ -662,7 +662,8 @@
            tracing
            transforms
            upload
-           util}
+           util
+           warehouse-schema-overlay}
    :model-imports #{:model/Card
                     :model/Collection
                     :model/Dashboard
@@ -3720,6 +3721,7 @@
            task
            task-history
            util
+           warehouse-schema-overlay
            enterprise/data-apps
            enterprise/serialization
            enterprise/transforms-python}
