@@ -281,7 +281,7 @@
   []
   (or (google-auth-enabled)
       ;; read by keyword the way `ee-sso-configured?` above does: `ldap-enabled` is defined in
-      ;; [[metabase.sso.settings.ldap-enabled]], which this namespace cannot require
+      ;; [[metabase.sso.ldap.settings]], which this namespace cannot require
       (setting/get :ldap-enabled)
       (ee-sso-configured?)))
 

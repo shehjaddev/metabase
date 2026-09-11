@@ -1,4 +1,4 @@
-(ns metabase.sso.settings.ldap-enabled
+(ns metabase.sso.ldap.settings
   "The `ldap-enabled` setting, which refuses to turn LDAP on until the configured server actually answers.
 
   It lives here rather than alongside the other SSO settings because that check runs

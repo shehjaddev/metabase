@@ -1,4 +1,4 @@
-(ns metabase.driver.settings.engines
+(ns metabase.driver.util.settings
   "The `engines` setting: which drivers this instance can use, and the connection form each one needs.
 
   It lives here rather than alongside the other driver settings because its value comes from
