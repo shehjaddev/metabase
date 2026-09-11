@@ -14,7 +14,7 @@
 
 ;;; -------------------------------------------------- Provider Registration --------------------------------------------------
 
-(derive :provider/slack-connect :provider/oidc)
+(auth-identity/derive! :provider/slack-connect :provider/oidc)
 
 ;;; -------------------------------------------------- Constants --------------------------------------------------
 
