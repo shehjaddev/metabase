@@ -15,4 +15,4 @@
 (deftest ^:parallel field-columns-match-the-field-schema-test
   (testing "the spelled-out column list keeps up with the Field schema it cannot require"
     (is (= (set (mu/map-schema-keys :metabase.warehouse-schema.schema/field))
-           warehouse-schema-overlay/field-columns))))
+           @#'warehouse-schema-overlay/field-columns))))

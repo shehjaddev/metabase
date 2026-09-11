@@ -8,6 +8,7 @@
   This module sits below `warehouse-schema` so that everything reading a Field or Table can reach it, the application
   database and model layers included. The `:metabase/table-or-field-query` linter checks that they do."
   (:require
+   [metabase.premium-features.defenterprise :refer [defenterprise-schema]]
    [metabase.util :as u]
    [metabase.util.malli :as mu]
    [toucan2.core :as t2]))
@@ -25,7 +26,7 @@
    :semantic_type      :semantic_type_set
    :fk_target_field_id :fk_target_field_id_set})
 
-(def field-columns
+(def ^:private field-columns
   "Every column of `metabase_field`. Spelled out rather than read from `:metabase.warehouse-schema.schema/field`,
   which lives in a module above this one; `metabase.warehouse-schema-overlay.core-test` fails if the two drift."
   #{:active :base_type :caveats :coercion_strategy :created_at :custom_position :data_sensitivity :database_default
@@ -148,6 +149,16 @@
    :data_layer         :data_layer_set
    :data_source        :data_source_set})
 
+(defenterprise-schema enable-workspace-overlay? :- :boolean
+  "Whether a read of Tables should name the workspace table a transform wrote its output to, rather than the
+  canonical one the Table row holds.
+
+  Declared with the narrow `metabase.premium-features.defenterprise` rather than `premium-features.core`: this module
+  sits below the settings namespaces, and `premium-features.core` would close a load cycle."
+  metabase-enterprise.workspaces.core
+  []
+  false)
+
 (def table-columns
   "Every column of `metabase_table`. Spelled out rather than read from `:metabase.warehouse-schema.schema/table`,
   which lives in a module above this one; `metabase.warehouse-schema-overlay.core-test` fails if the two drift."
@@ -157,9 +168,9 @@
     :owner_email :owner_user_id :points_of_interest :schema :show_in_getting_started :transform_id :transform_target
     :unique_table_helper :updated_at :view_count :visibility_type})
 
-(def ^:private sync-owned-table-columns
-  "The columns of `metabase_table` users cannot set."
-  (sort (remove user-settable-table-columns table-columns)))
+(def ^:private workspace-remapped-table-columns
+  "The Table columns a workspace remapping replaces: where the table physically lives right now."
+  #{:schema :name})
 
 (mu/defn table-user-settings-recorded-clause
   "Honey SQL predicate matching a `metabase_table_user_settings` row aliased `settings-alias` that records something.
@@ -208,29 +219,82 @@
         [:case [:= [:coalesce settings-column table-column] true] true :else false]
         [:coalesce settings-column table-column]))))
 
+(mu/defn- workspace-remapping-join
+  "The `:left-join` entries joining `workspace_table_remapping` as `remapping-alias` to the Table table aliased
+  `table-alias`, on the canonical `(db, schema, table)` the remapping was recorded against. Workspaces are only
+  settable on drivers with schemas, so both schemas are always there to compare."
+  [table-alias     :- :keyword
+   remapping-alias :- :keyword]
+  [[(t2/table-name :model/WorkspaceTableRemapping) remapping-alias]
+   [:and
+    [:= (u/qualified-key remapping-alias :db_id) (u/qualified-key table-alias :db_id)]
+    [:= (u/qualified-key remapping-alias :from_schema) (u/qualified-key table-alias :schema)]
+    [:= (u/qualified-key remapping-alias :from_table) (u/qualified-key table-alias :name)]]])
+
+(mu/defn- workspace-remapped-column
+  "Honey SQL expression for `column` as readers see it: the workspace table's value when the Table has a remapping,
+  else the Table's own. Requires [[workspace-remapping-join]]."
+  [column          :- (into [:enum] workspace-remapped-table-columns)
+   table-alias     :- :keyword
+   remapping-alias :- :keyword]
+  [:case [:not= (u/qualified-key remapping-alias :id) nil]
+   (u/qualified-key remapping-alias (if (= column :name) :to_table :to_schema))
+   :else (u/qualified-key table-alias column)])
+
+(mu/defn- table-select
+  "The `:select` list [[table-query]] projects: every Table column, each taken from whichever source names it for the
+  reader asking. The two overlays never touch the same column -- what a user sets is never where the table lives --
+  so each column has at most one of them."
+  [user-settings? :- :boolean
+   remapping?     :- :boolean]
+  (mapv (fn [column]
+          (cond
+            (and user-settings? (user-settable-table-columns column))
+            [(table-user-settings-column column :t :u) column]
+
+            (and remapping? (workspace-remapped-table-columns column))
+            [(workspace-remapped-column column :t :w) column]
+
+            :else
+            (u/qualified-key :t column)))
+        (sort table-columns)))
+
 (mu/defn table-query :- [:tuple :any :keyword]
   "The source a query over Tables reads from, for its `:from` or a join: a subquery over `metabase_table` left joined
-  to `metabase_table_user_settings`, projecting every Table column with the user-settable ones replaced by the value
-  users see.
+  to what overlays it, projecting every Table column with the overlaid ones replaced by the value readers see.
 
     (t2/select :model/Table :db_id database-id {:from [(table-query)]})
 
-  Takes the same options as [[field-query]]: `:alias` for a query that joins something else, and
-  `{:user-settings? false}` for sync's own values, which is the plain table."
+  Two overlays apply, each with its own opt-out, because they answer to different readers:
+
+  - `:user-settings?` merges `metabase_table_user_settings`, the values a user set. `false` asks for sync's own.
+  - `:workspace-remapping?` projects `schema` and `name` from the `workspace_table_remapping` row a transform wrote
+    when it sent its output to the database's workspace schema, so a reader -- the query processor included -- names
+    the table the data is actually in while the Table row keeps the canonical identity sync recorded. `false` asks
+    for that canonical location. Off unless workspaces are enabled, so the common case pays nothing.
+
+  Sync wants neither: it reconciles the rows it wrote against the warehouse. A permission query wants the remapping
+  without the user settings -- see `metabase.permissions.models.data-permissions.sql/table-source`.
+
+  Takes `:alias` as [[field-query]] does, for a query that joins something else. With both overlays off this is
+  `metabase_table` itself, which keeps the shape usable anywhere a plain table reference was."
   ([]
    (table-query nil))
 
-  ([{:keys [alias user-settings?]
-     :or   {alias          (t2/table-name :model/Table)
-            user-settings? true}} :- [:maybe [:map
-                                              [:alias          {:optional true} :keyword]
-                                              [:user-settings? {:optional true} :boolean]]]]
-   [(if user-settings?
-      ^:allow-subquery
-      {:select    (into (mapv #(u/qualified-key :t %) sync-owned-table-columns)
-                        (map (fn [column] [(table-user-settings-column column :t :u) column]))
-                        (sort user-settable-table-columns))
-       :from      [[(t2/table-name :model/Table) :t]]
-       :left-join (table-user-settings-join :t :u)}
-      (t2/table-name :model/Table))
-    alias]))
+  ([{:keys [alias user-settings? workspace-remapping?]
+     :or   {alias                (t2/table-name :model/Table)
+            user-settings?       true
+            workspace-remapping? true}} :- [:maybe [:map
+                                                    [:alias                {:optional true} :keyword]
+                                                    [:user-settings?       {:optional true} :boolean]
+                                                    [:workspace-remapping? {:optional true} :boolean]]]]
+   (let [remapping? (and workspace-remapping? (enable-workspace-overlay?))]
+     [(if (or user-settings? remapping?)
+        ^:allow-subquery
+        {:select    (table-select user-settings? remapping?)
+         :from      [[(t2/table-name :model/Table) :t]]
+         :left-join (cond-> []
+                      user-settings? (into (table-user-settings-join :t :u))
+                      remapping?     (into (workspace-remapping-join :t :w)))}
+        (t2/table-name :model/Table))
+      alias])))
