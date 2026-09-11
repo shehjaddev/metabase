@@ -231,6 +231,19 @@
     [:= (u/qualified-key remapping-alias :from_schema) (u/qualified-key table-alias :schema)]
     [:= (u/qualified-key remapping-alias :from_table) (u/qualified-key table-alias :name)]]])
 
+(mu/defn- workspace-table-join
+  "The `:left-join` entries joining `workspace_table_remapping` as `remapping-alias` to the Table table aliased
+  `table-alias` on the *workspace* table a remapping points at -- the anti-join half of [[table-query]]: sync gives
+  a workspace table a Table row of its own, and that row would otherwise come back alongside the canonical row now
+  remapped onto it."
+  [table-alias     :- :keyword
+   remapping-alias :- :keyword]
+  [[(t2/table-name :model/WorkspaceTableRemapping) remapping-alias]
+   [:and
+    [:= (u/qualified-key remapping-alias :db_id) (u/qualified-key table-alias :db_id)]
+    [:= (u/qualified-key remapping-alias :to_schema) (u/qualified-key table-alias :schema)]
+    [:= (u/qualified-key remapping-alias :to_table) (u/qualified-key table-alias :name)]]])
+
 (mu/defn- workspace-remapped-column
   "Honey SQL expression for `column` as readers see it: the workspace table's value when the Table has a remapping,
   else the Table's own. Requires [[workspace-remapping-join]]."
@@ -263,6 +276,9 @@
   "The source a query over Tables reads from, for its `:from` or a join: a subquery over `metabase_table` left joined
   to what overlays it, projecting every Table column with the overlaid ones replaced by the value readers see.
 
+  Sync gives the workspace table a Table row of its own, which would then be a second row naming the same place; it
+  is left out here, so a database with both rows reads as the one table it is.
+
     (t2/select :model/Table :db_id database-id {:from [(table-query)]})
 
   Two overlays apply, each with its own opt-out, because they answer to different readers:
@@ -291,10 +307,13 @@
    (let [remapping? (and workspace-remapping? (enable-workspace-overlay?))]
      [(if (or user-settings? remapping?)
         ^:allow-subquery
-        {:select    (table-select user-settings? remapping?)
-         :from      [[(t2/table-name :model/Table) :t]]
-         :left-join (cond-> []
-                      user-settings? (into (table-user-settings-join :t :u))
-                      remapping?     (into (workspace-remapping-join :t :w)))}
+        (cond-> {:select    (table-select user-settings? remapping?)
+                 :from      [[(t2/table-name :model/Table) :t]]
+                 :left-join (cond-> []
+                              user-settings? (into (table-user-settings-join :t :u))
+                              remapping?     (into (concat (workspace-remapping-join :t :w)
+                                                           (workspace-table-join :t :wt))))}
+          ;; the workspace table's own Table row drops out: the canonical row above already names it
+          remapping? (assoc :where [:= :wt.id nil]))
         (t2/table-name :model/Table))
       alias])))
