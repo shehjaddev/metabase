@@ -2065,7 +2065,8 @@
            tracing
            users
            util
-           warehouse-schema-overlay}
+           warehouse-schema-overlay
+           workspaces}
    :model-imports #{:model/Card
                     :model/DashboardCardSeries
                     :model/Database
