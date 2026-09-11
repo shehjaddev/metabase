@@ -48,7 +48,9 @@
     ;; whole map would be true even for a run that was never remapped
     (when (and (not= (select-keys (:target resolved) [:schema :name])
                      (select-keys (:target transform) [:schema :name]))
-               (false? (u/ignore-exceptions (transforms-base.u/target-table-exists? resolved))))
+               ;; not `false?`: a probe that throws tells us nothing, and leaving the remapping would point the
+               ;; canonical table at a workspace table that may never have been created
+               (not (true? (u/ignore-exceptions (transforms-base.u/target-table-exists? resolved)))))
       (let [{:keys [schema name]} (:target transform)]
         (workspaces/unmap-table! db-id schema name)))))
 

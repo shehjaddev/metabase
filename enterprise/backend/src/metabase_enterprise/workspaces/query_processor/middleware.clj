@@ -85,11 +85,14 @@
   "Pre-processing middleware. Rewrites the canonical table references in native stages to the workspace tables."
   :feature :workspaces
   [{db-id :database, :as query} :- ::lib.schema/query]
+  ;; checked before the remappings, and against the setting rather than them: a routed query still names the router
+  ;; database here, and the router holds no transform output of its own, so waiting for its remappings would let
+  ;; every routed query through -- to read the destination's remapped tables under their canonical names
+  (when (and (:destination-database/id query)
+             (workspaces/enabled?))
+    (throw (ex-info (tru "Database routing is not supported together with workspaces.")
+                    {:type qp.error-type/qp, :database-id db-id})))
   (if-let [remappings (when (workspaces/allow-table-remapping?)
                         (ws.impl/remappings-for-db db-id))]
-    (do
-      (when (:destination-database/id query)
-        (throw (ex-info (tru "Database routing is not supported together with workspaces.")
-                        {:type qp.error-type/qp, :database-id db-id})))
-      (update query :stages #(rewrite-stages driver/*driver* remappings %)))
+    (update query :stages #(rewrite-stages driver/*driver* remappings %))
     query))
