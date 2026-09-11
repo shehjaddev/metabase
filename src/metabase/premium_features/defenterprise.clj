@@ -36,10 +36,8 @@
   [feature]
   (or (= feature :none)
       (do
-        ;; Avoid a circular dependency: metabase.premium-features.settings requires this namespace for `defenterprise`.
-        ;; Requiring it rather than metabase.premium-features.token-check (which it pulls in) also registers the
-        ;; Settings that `has-feature?` reads by keyword.
-        (classloader/require 'metabase.premium-features.settings)
+        ;; Avoid a circular dependency between this namespace and metabase.premium-features.token-check
+        (classloader/require 'metabase.premium-features.token-check)
         ((resolve 'metabase.premium-features.token-check/has-feature?) feature))))
 
 (defn dynamic-ee-oss-fn

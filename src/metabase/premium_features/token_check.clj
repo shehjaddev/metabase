@@ -22,6 +22,7 @@
    [metabase.internal-stats.core :as internal-stats]
    [metabase.premium-features.db :as premium-features.db]
    [metabase.premium-features.defenterprise :refer [defenterprise]]
+   [metabase.premium-features.settings :as premium-features.settings]
    [metabase.settings.core :as setting]
    [metabase.tracing.core :as tracing]
    [metabase.util :as u]
@@ -37,25 +38,6 @@
    [toucan2.core :as t2]))
 
 (set! *warn-on-reflection* true)
-
-;;; [[metabase.premium-features.settings]] defines these Settings and requires this namespace for the getter and setter
-;;; impls below, so this namespace cannot require it back; reading them by keyword goes through the same registry the
-;;; generated Setting functions do.
-
-(defn- active-users-count []
-  (setting/get :active-users-count))
-
-(defn- is-hosted? []
-  (setting/get :is-hosted?))
-
-(defn- premium-embedding-token []
-  (setting/get :premium-embedding-token))
-
-(defn- site-uuid-for-premium-features-token-checks []
-  (setting/get :site-uuid-for-premium-features-token-checks))
-
-(defn- set-locked-meters! [locks]
-  (setting/set! :locked-meters locks))
 
 (def RemoteCheckedToken
   "Schema for a valid premium token. Must be 64 lower-case hex characters."
@@ -157,7 +139,7 @@
   []
   ;; NOTE: beware, if you use `defenterprise` here which uses any other `:feature` other than `:none`, it will
   ;; recursively trigger token check and will die
-  (let [users                     (active-users-count)
+  (let [users                     (premium-features.settings/active-users-count)
         ext-users                 (internal-stats/external-users-count)
         embedding-dashboard-count (internal-stats/embedding-dashboard-count)
         embedding-question-count  (internal-stats/embedding-question-count)
@@ -233,10 +215,10 @@
 (defn send-metering-events!
   "Send metering events for billing purposes"
   []
-  (when-let [token (premium-embedding-token)]
+  (when-let [token (premium-features.settings/premium-embedding-token)]
     (when (mr/validate [:re RemoteCheckedToken] token)
       (tracing/with-span :tasks "metering.send-events" {}
-        (let [site-uuid (site-uuid-for-premium-features-token-checks)]
+        (let [site-uuid (premium-features.settings/site-uuid-for-premium-features-token-checks)]
           (try
             (http/post (metering-url token token-check-url)
                        {:body (json/encode (merge (metering-stats)
@@ -254,7 +236,7 @@
 (mu/defn max-users-allowed :- [:maybe pos-int?]
   "Returns the max users value from an airgapped key, or nil indicating there is no limit."
   []
-  (when-let [token (premium-embedding-token)]
+  (when-let [token (premium-features.settings/premium-embedding-token)]
     (when (str/starts-with? token "airgap_")
       (let [max-users (:max-users (decode-airgap-token token))]
         (when (pos? max-users) max-users)))))
@@ -291,7 +273,7 @@
   ;; will have taken a lock to call through to here, and could create a deadlock with the future's thread.  See
   ;; https://github.com/metabase/metabase/pull/38029/
   (cond (mr/validate [:re RemoteCheckedToken] token)
-        (let [site-uuid (site-uuid-for-premium-features-token-checks)]
+        (let [site-uuid (premium-features.settings/site-uuid-for-premium-features-token-checks)]
           (fetch-token-and-parse-body token token-check-url site-uuid))
 
         (mr/validate [:re AirgapToken] token)
@@ -337,7 +319,7 @@
                           {:pass-thru true})))
         ;; important to not count these errors against the circuit breaker. These are not the types of errors we need
         ;; to circuit break. (#65294)
-        (when-not ((requiring-resolve 'metabase.app-db.core/db-is-set-up?))
+        (when-not (app-db/db-is-set-up?)
           (throw (ex-info "Metabase DB is not yet set up"
                           {:cause :token-check/app-db-not-ready})))
         (locking lock
@@ -415,7 +397,7 @@
   [result]
   (when (contains? result :meters)
     (try
-      (set-locked-meters! (extract-locks (:meters result)))
+      (premium-features.settings/locked-meters! (extract-locks (:meters result)))
       (catch Throwable t
         (log/warnf "Failed to mirror :locked-meters from token-check response: %s" (ex-message t))))))
 
@@ -613,7 +595,7 @@
 (defn -airgap-enabled
   "Getter for [[metabase.premium-features.settings/airgap-enabled]]"
   []
-  (mr/validate AirgapToken (premium-embedding-token)))
+  (mr/validate AirgapToken (premium-features.settings/premium-embedding-token)))
 
 (let [cached-logger (memoize/ttl
                      ^{::memoize/args-fn (fn [[token _e]] [token])}
@@ -625,26 +607,26 @@
     "Get the features associated with the system's premium features token."
     []
     (try
-      (or (some-> (premium-embedding-token)
+      (or (some-> (premium-features.settings/premium-embedding-token)
                   (check-token)
                   :features set)
           #{})
       (catch Throwable e
         (when (:pass-thru (ex-data e))
           (throw e))
-        (cached-logger (premium-embedding-token) e)
+        (cached-logger (premium-features.settings/premium-embedding-token) e)
         #{}))))
 
 (defn -token-status
   "Getter for the [[metabase.premium-features.settings/token-status]] setting."
   []
-  (some-> (premium-embedding-token)
+  (some-> (premium-features.settings/premium-embedding-token)
           (check-token)))
 
 (mu/defn plan-alias :- [:maybe :string]
   "Returns a string representing the instance's current plan, if included in the last token status request."
   []
-  (some-> (premium-embedding-token)
+  (some-> (premium-features.settings/premium-embedding-token)
           (check-token)
           :plan-alias))
 
@@ -652,7 +634,7 @@
   "Returns a vector of maps for each quota of the subscription."
   []
   (clear-cache!)
-  (some-> (premium-embedding-token)
+  (some-> (premium-features.settings/premium-embedding-token)
           (check-token)
           :quotas))
 
@@ -660,7 +642,7 @@
   "Returns a map of current metered usage for the subscription."
   []
   (clear-cache!)
-  (some-> (premium-embedding-token)
+  (some-> (premium-features.settings/premium-embedding-token)
           (check-token)
           :meters))
 
@@ -681,7 +663,7 @@
   "Returns `true` if the token definitively has `feature`, `false` if it definitively does not, or `nil` if the token
   status is indeterminate (e.g., network failure, timeout). Returns `false` (not `nil`) when no token is configured."
   [feature]
-  (if-let [token (premium-embedding-token)]
+  (if-let [token (premium-features.settings/premium-embedding-token)]
     (let [result (check-token token)]
       (when (:canonical? result)
         (boolean (contains? (set (:features result)) (name feature)))))
@@ -720,7 +702,7 @@
 (defn log-enabled?
   "Returns true when we should record audit data into the audit log."
   []
-  (or (is-hosted?) (has-feature? :audit-app)))
+  (or (premium-features.settings/is-hosted?) (has-feature? :audit-app)))
 
 (defn query-transforms-enabled?
   "Whether query (native/MBQL) transforms are available on this instance. Available on any non-hosted
@@ -728,7 +710,7 @@
   `:transforms-basic` feature. Also requires the :transforms-enabled setting to be true."
   []
   (and (setting/get :transforms-enabled)
-       (or (not (is-hosted?))
+       (or (not (premium-features.settings/is-hosted?))
            (has-feature? :transforms-basic))))
 
 (defn python-transforms-enabled?
