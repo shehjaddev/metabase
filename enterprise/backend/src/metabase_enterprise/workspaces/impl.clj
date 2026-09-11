@@ -6,6 +6,7 @@
    [clojure.core.memoize :as memoize]
    [clojure.string :as str]
    [metabase-enterprise.workspaces.db :as ws.db]
+   [metabase-enterprise.workspaces.settings :as ws.settings]
    [metabase.app-db.core :as mdb]
    [metabase.driver :as driver]
    [metabase.driver.util :as driver.u]
@@ -14,8 +15,7 @@
    [metabase.settings.core :as setting]
    [metabase.util.i18n :refer [tru]]
    [metabase.util.malli :as mu]
-   [metabase.workspaces.schema :as ws.schema]
-   [metabase.workspaces.settings :as ws.settings]))
+   [metabase.workspaces.schema :as ws.schema]))
 
 (set! *warn-on-reflection* true)
 

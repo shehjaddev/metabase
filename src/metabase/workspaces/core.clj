@@ -13,8 +13,7 @@
    [metabase.lib.schema.common :as lib.schema.common]
    [metabase.lib.schema.id :as lib.schema.id]
    [metabase.premium-features.core :refer [defenterprise-schema]]
-   [metabase.workspaces.schema :as ws.schema]
-   [metabase.workspaces.settings :as ws.settings]))
+   [metabase.workspaces.schema :as ws.schema]))
 
 (def ^:dynamic *allow-table-remapping*
   "Whether the query processor may redirect canonical table references to their workspace tables. Bound to false
@@ -33,11 +32,11 @@
   `(binding [*allow-table-remapping* false]
      ~@body))
 
-(defn enabled?
-  "Whether workspaces are enabled on this instance. The setting is gated on the `:workspaces` token feature, so this
-  is false without it."
+(defenterprise-schema enabled? :- :boolean
+  "Whether workspaces are enabled on this instance."
+  metabase-enterprise.workspaces.core
   []
-  (ws.settings/workspaces-enabled))
+  false)
 
 (defenterprise-schema remap-table! :- ::ws.schema/table-info
   "Record (or reuse) the remapping of the canonical table `table-name` in `schema` and return its workspace table.

@@ -1,4 +1,4 @@
-(ns metabase.workspaces.settings
+(ns metabase-enterprise.workspaces.settings
   (:require
    [metabase.settings.core :refer [defsetting]]
    [metabase.util.i18n :refer [deferred-tru]]))

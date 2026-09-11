@@ -2,6 +2,7 @@
   "EE implementations of the workspace mode hooks declared in `metabase.workspaces.core`."
   (:require
    [metabase-enterprise.workspaces.impl :as ws.impl]
+   [metabase-enterprise.workspaces.settings :as ws.settings]
    [metabase.lib.schema.common :as lib.schema.common]
    [metabase.lib.schema.id :as lib.schema.id]
    [metabase.premium-features.core :refer [defenterprise-schema]]
@@ -45,6 +46,12 @@
   :feature :workspaces
   [db-id :- ::lib.schema.id/database]
   (ws.impl/table-remappings db-id))
+
+(defenterprise-schema enabled? :- :boolean
+  "Whether workspaces are enabled on this instance."
+  :feature :workspaces
+  []
+  (boolean (ws.settings/workspaces-enabled)))
 
 (defenterprise-schema enable-workspace-overlay? :- :boolean
   "Whether a read of Tables should name the workspace table a transform wrote its output to."
